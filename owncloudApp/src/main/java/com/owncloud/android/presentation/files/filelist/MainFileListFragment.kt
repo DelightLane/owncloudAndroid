@@ -33,6 +33,7 @@ import android.content.res.Configuration
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuInflater
@@ -167,6 +168,8 @@ class MainFileListFragment : Fragment(),
     private lateinit var layoutManager: StaggeredGridLayoutManager
     private lateinit var fileListAdapter: FileListAdapter
     private lateinit var viewType: ViewType
+
+    private val scrollPositionsByFolderId = mutableMapOf<Long, Parcelable>()
 
     var actionMode: ActionMode? = null
 
@@ -851,6 +854,7 @@ class MainFileListFragment : Fragment(),
                 filesToAdd = fileListUiState.folderContent,
                 fileListOption = fileListUiState.fileListOption,
             )
+            restoreScrollPositionIfAny(fileListUiState.folderToDisplay?.id)
             showOrHideEmptyView(fileListUiState)
 
             binding.spaceHeader.root.apply {
@@ -1353,7 +1357,27 @@ class MainFileListFragment : Fragment(),
      *
      */
     fun onBrowseUp() {
+        saveCurrentScrollPosition()
         mainFileListViewModel.manageBrowseUp()
+    }
+
+    /**
+     * Remembers the scroll position of the folder we are navigating away from, so it can be
+     * restored if the user browses back up into it.
+     */
+    private fun saveCurrentScrollPosition() {
+        val currentFolderId = mainFileListViewModel.currentFolderDisplayed.value.id ?: return
+        layoutManager.onSaveInstanceState()?.let { scrollPositionsByFolderId[currentFolderId] = it }
+    }
+
+    /**
+     * Restores the scroll position saved for [folderId] (e.g. when browsing back up into it), if any.
+     */
+    private fun restoreScrollPositionIfAny(folderId: Long?) {
+        val savedScrollPosition = folderId?.let { scrollPositionsByFolderId.remove(it) } ?: return
+        binding.recyclerViewMainFileList.post {
+            layoutManager.onRestoreInstanceState(savedScrollPosition)
+        }
     }
 
     /**
@@ -1583,6 +1607,7 @@ class MainFileListFragment : Fragment(),
         val ocFile = ocFileWithSyncInfo.file
 
         if (ocFile.isFolder) {
+            saveCurrentScrollPosition()
             mainFileListViewModel.updateFolderToDisplay(ocFile)
         } else { // Click on a file
             fileActions?.onFileClicked(ocFile)
