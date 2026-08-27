@@ -220,6 +220,8 @@
     <string name="downloader_download_failed_content">%1$s을(를) 다운로드할 수 없습니다</string>
     <string name="downloader_not_downloaded_yet">아직 다운로드되지 않았음</string>
     <string name="downloader_download_failed_credentials_error">다운로드가 실패하였습니다. 다시 로그인하세요.</string>
+    <string name="downloader_download_failed_permission_error">저장소 접근 권한이 필요하여 다운로드에 실패했습니다. 탭하여 권한을 허용하세요.</string>
+    <string name="download_failed_storage_permission_required">다운로드한 파일을 저장하려면 저장소 접근 권한이 필요합니다</string>
     <string name="common_choose_account">계정 선택</string>
     <string name="sync_fail_ticker">동기화 실패</string>
     <string name="sync_fail_ticker_unauthorized">동기화 실패. 다시 로그인하세요.</string>

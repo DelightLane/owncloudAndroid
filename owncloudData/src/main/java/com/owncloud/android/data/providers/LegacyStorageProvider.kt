@@ -22,7 +22,11 @@ package com.owncloud.android.data.providers
 import android.os.Environment
 import java.io.File
 
-@Deprecated("Do not use this anymore. We have moved to Scoped Storage")
+/**
+ * Stores files directly under the shared external storage root (e.g. /storage/emulated/0/owncloud/...)
+ * instead of the app-scoped storage directory, so the account/folder structure is browsable from
+ * outside the app. Requires the MANAGE_EXTERNAL_STORAGE permission on API >= 30.
+ */
 class LegacyStorageProvider(
     rootFolderName: String
 ) : LocalStorageProvider(rootFolderName) {

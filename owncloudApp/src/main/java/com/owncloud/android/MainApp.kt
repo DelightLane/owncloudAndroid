@@ -54,7 +54,6 @@ import com.owncloud.android.domain.user.usecases.GetStoredQuotaUseCase
 import com.owncloud.android.extensions.createNotificationChannel
 import com.owncloud.android.lib.common.SingleSessionManager
 import com.owncloud.android.presentation.authentication.AccountUtils
-import com.owncloud.android.presentation.migration.StorageMigrationActivity
 import com.owncloud.android.presentation.releasenotes.ReleaseNotesActivity
 import com.owncloud.android.presentation.security.biometric.BiometricActivity
 import com.owncloud.android.presentation.security.biometric.BiometricManager
@@ -128,7 +127,6 @@ class MainApp : Application() {
                     activity !is PatternActivity &&
                     activity !is BiometricActivity
                 ) {
-                    StorageMigrationActivity.runIfNeeded(activity)
                     if (isFirstRun()) {
                         WhatsNewActivity.runIfNeeded(activity)
 

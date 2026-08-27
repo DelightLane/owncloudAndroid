@@ -25,6 +25,10 @@ import android.accounts.Account
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -34,6 +38,7 @@ import com.owncloud.android.data.executeRemoteOperation
 import com.owncloud.android.data.providers.LocalStorageProvider
 import com.owncloud.android.domain.exceptions.CancelledException
 import com.owncloud.android.domain.exceptions.LocalStorageNotMovedException
+import com.owncloud.android.domain.exceptions.LocalStoragePermissionRequiredException
 import com.owncloud.android.domain.exceptions.NoConnectionWithServerException
 import com.owncloud.android.domain.files.model.OCFile
 import com.owncloud.android.domain.files.usecases.CleanConflictUseCase
@@ -115,6 +120,7 @@ class DownloadFileWorker(
         if (!areParametersValid()) return Result.failure()
 
         return try {
+            if (!isLocalStoragePermissionGranted()) throw LocalStoragePermissionRequiredException()
             downloadFileToTemporalFile()
             moveTemporalFileToFinalLocation()
             updateDatabaseWithLatestInfoForThisFile()
@@ -124,6 +130,13 @@ class DownloadFileWorker(
             notifyDownloadResult(throwable)
         }
     }
+
+    /**
+     * Files are stored under the shared external storage root, which on API >= 30 requires the
+     * special MANAGE_EXTERNAL_STORAGE ("all files access") permission, only grantable from system settings.
+     */
+    private fun isLocalStoragePermissionGranted(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
 
     /**
      * Verify that the parameters are valid.
@@ -250,6 +263,9 @@ class DownloadFileWorker(
             if (throwable is UnauthorizedException) {
                 tickerId = R.string.downloader_download_failed_credentials_error
                 pendingIntent = composePendingIntentToRefreshCredentials()
+            } else if (throwable is LocalStoragePermissionRequiredException) {
+                tickerId = R.string.downloader_download_failed_permission_error
+                pendingIntent = composePendingIntentToGrantStoragePermission()
             }
 
             val contextText = ErrorMessageAdapter.getMessageFromTransfer(
@@ -301,6 +317,25 @@ class DownloadFileWorker(
             appContext,
             System.currentTimeMillis().toInt(),
             updateCredentialsIntent,
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    /**
+     * Shortcut straight to the system screen where the user can grant the "all files access"
+     * permission needed to write into the shared external storage.
+     */
+    private fun composePendingIntentToGrantStoragePermission(): PendingIntent {
+        val grantPermissionIntent =
+            Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${appContext.packageName}")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+            }
+
+        return PendingIntent.getActivity(
+            appContext,
+            System.currentTimeMillis().toInt(),
+            grantPermissionIntent,
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
     }

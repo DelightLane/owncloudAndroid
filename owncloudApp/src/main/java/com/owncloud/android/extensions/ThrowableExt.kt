@@ -38,6 +38,7 @@ import com.owncloud.android.domain.exceptions.IncorrectAddressException
 import com.owncloud.android.domain.exceptions.InstanceNotConfiguredException
 import com.owncloud.android.domain.exceptions.InvalidOverwriteException
 import com.owncloud.android.domain.exceptions.LocalFileNotFoundException
+import com.owncloud.android.domain.exceptions.LocalStoragePermissionRequiredException
 import com.owncloud.android.domain.exceptions.MoveIntoDescendantException
 import com.owncloud.android.domain.exceptions.MoveIntoSameFolderException
 import com.owncloud.android.domain.exceptions.NetworkErrorException
@@ -90,6 +91,7 @@ fun Throwable.parseError(
             is InstanceNotConfiguredException -> resources.getString(R.string.auth_not_configured_title)
             is InvalidOverwriteException -> resources.getString(R.string.file_already_exists)
             is LocalFileNotFoundException -> resources.getString(R.string.local_file_not_found_toast)
+            is LocalStoragePermissionRequiredException -> resources.getString(R.string.download_failed_storage_permission_required)
             is MoveIntoDescendantException -> resources.getString(R.string.move_file_invalid_into_descendent)
             is MoveIntoSameFolderException -> resources.getString(R.string.move_file_invalid_overwrite)
             is NoConnectionWithServerException -> resources.getString(R.string.network_error_socket_exception)

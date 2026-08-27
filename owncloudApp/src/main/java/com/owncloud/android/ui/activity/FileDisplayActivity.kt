@@ -31,6 +31,7 @@ package com.owncloud.android.ui.activity
 
 import android.Manifest.permission.POST_NOTIFICATIONS
 import android.accounts.Account
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -39,7 +40,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.RemoteException
+import android.provider.Settings
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.Menu
@@ -293,7 +296,32 @@ class FileDisplayActivity : FileActivity(),
 
 
         checkNotificationPermission()
+        checkManageExternalStoragePermission()
         Timber.v("onCreate() end")
+    }
+
+    /**
+     * Local files are stored under the shared external storage root (e.g. /storage/emulated/0/owncloud/...),
+     * which on API >= 30 requires the special MANAGE_EXTERNAL_STORAGE ("all files access") permission.
+     * This can only be granted from system settings, so we redirect the user there once.
+     */
+    private fun checkManageExternalStoragePermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()) return
+
+        val alreadyRequested = sharedPreferences.getBoolean(PREFERENCE_MANAGE_EXTERNAL_STORAGE_PERMISSION_REQUESTED, false)
+        if (alreadyRequested) return
+
+        sharedPreferences.putBoolean(PREFERENCE_MANAGE_EXTERNAL_STORAGE_PERMISSION_REQUESTED, true)
+        try {
+            startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")))
+        } catch (e: ActivityNotFoundException) {
+            Timber.w(e, "ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION not available, falling back to generic screen")
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            } catch (e: ActivityNotFoundException) {
+                Timber.w(e, "ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION not available either")
+            }
+        }
     }
 
     private fun checkNotificationPermission() {
@@ -2107,6 +2135,7 @@ class FileDisplayActivity : FileActivity(),
         private const val CUSTOM_DIALOG_TAG = "CUSTOM_DIALOG"
 
         private const val PREFERENCE_NOTIFICATION_PERMISSION_REQUESTED = "PREFERENCE_NOTIFICATION_PERMISSION_REQUESTED"
+        private const val PREFERENCE_MANAGE_EXTERNAL_STORAGE_PERMISSION_REQUESTED = "PREFERENCE_MANAGE_EXTERNAL_STORAGE_PERMISSION_REQUESTED"
         const val PREFERENCE_CLEAR_DATA_ALREADY_TRIGGERED = "PREFERENCE_CLEAR_DATA_ALREADY_TRIGGERED"
         const val ALL_FILES_SAF_REGEX = "*/*"
 

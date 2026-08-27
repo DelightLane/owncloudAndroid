@@ -45,9 +45,9 @@ import com.owncloud.android.data.sharing.shares.datasources.LocalShareDataSource
 import com.owncloud.android.data.sharing.shares.datasources.implementation.OCLocalShareDataSource
 import com.owncloud.android.data.spaces.datasources.LocalSpacesDataSource
 import com.owncloud.android.data.spaces.datasources.implementation.OCLocalSpacesDataSource
+import com.owncloud.android.data.providers.LegacyStorageProvider
 import com.owncloud.android.data.providers.LocalStorageProvider
 import com.owncloud.android.data.providers.QaStorageProvider
-import com.owncloud.android.data.providers.ScopedStorageProvider
 import com.owncloud.android.data.transfers.datasources.LocalTransferDataSource
 import com.owncloud.android.data.transfers.datasources.implementation.OCLocalTransferDataSource
 import com.owncloud.android.data.user.datasources.LocalUserDataSource
@@ -75,7 +75,7 @@ val localDataSourceModule = module {
         if (BuildConfig.FLAVOR == MainApp.QA_FLAVOR) {
             QaStorageProvider(dataFolder)
         } else {
-            ScopedStorageProvider(dataFolder, androidContext())
+            LegacyStorageProvider(dataFolder)
         }
     }
 
