@@ -77,6 +77,13 @@ fun File.moveRecursively(
                     dstFile.mkdirs()
                 } else {
                     try {
+                        // File.copyTo does not preserve the source's last-modified time, it stamps the copy
+                        // with the time the copy happened. Carrying the original mtime over keeps it a real
+                        // "move" from the sync engine's point of view: otherwise every already-downloaded,
+                        // available-offline file looks locally modified right after a storage location
+                        // change, which can combine with an unrelated remote etag difference to raise a
+                        // false "local vs remote" conflict even though the file was never touched.
+                        val srcLastModified = src.lastModified()
                         if (src.copyTo(dstFile, overwrite).length() != src.length()) {
                             if (onError(
                                     src,
@@ -85,6 +92,7 @@ fun File.moveRecursively(
                             )
                                 return false
                         } else {
+                            dstFile.setLastModified(srcLastModified)
                             src.delete()
                         }
                     } catch (e: IOException) {

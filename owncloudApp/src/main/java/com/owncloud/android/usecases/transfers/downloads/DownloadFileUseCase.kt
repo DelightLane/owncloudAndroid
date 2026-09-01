@@ -18,6 +18,9 @@
  */
 package com.owncloud.android.usecases.transfers.downloads
 
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
@@ -26,11 +29,14 @@ import com.owncloud.android.domain.files.model.OCFile
 import com.owncloud.android.extensions.PENDING_WORK_STATUS
 import com.owncloud.android.extensions.buildWorkQuery
 import com.owncloud.android.extensions.getTagsForDownload
+import com.owncloud.android.usecases.transfers.DOWNLOAD_LANE_TAG_PREFIX
 import com.owncloud.android.usecases.transfers.MAXIMUM_NUMBER_OF_RETRIES
+import com.owncloud.android.usecases.transfers.MAX_CONCURRENT_DOWNLOADS
 import com.owncloud.android.usecases.transfers.TRANSFER_TAG_DOWNLOAD
 import com.owncloud.android.workers.DownloadFileWorker
 import timber.log.Timber
 import java.util.UUID
+import kotlin.math.absoluteValue
 
 /**
  * We will use [WorkManager] to perform downloads.
@@ -92,15 +98,29 @@ class DownloadFileUseCase(
             DownloadFileWorker.KEY_PARAM_FILE_ID to ocFile.id
         )
 
+        // Downloading a folder with many files enqueues one worker per file. Without this constraint, a
+        // connectivity blip partway through the batch would make each remaining worker run and fail
+        // immediately instead of waiting for the network to come back.
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
         val downloadFileWork = OneTimeWorkRequestBuilder<DownloadFileWorker>()
             .setInputData(inputData)
+            .setConstraints(constraints)
             .addTag(ocFile.id.toString())
             .addTag(accountName)
             .addTag(TRANSFER_TAG_DOWNLOAD)
             .build()
 
-        workManager.enqueue(downloadFileWork)
-        Timber.i("Download of ${ocFile.fileName} has been enqueued.")
+        // Route the download into one of a fixed number of lanes instead of enqueueing it directly.
+        // Each lane is a unique sequential work chain, so only one download runs per lane at a time, which
+        // caps the number of downloads running at once across the whole app to MAX_CONCURRENT_DOWNLOADS
+        // regardless of how many files are queued. APPEND_OR_REPLACE keeps the lane moving even if the
+        // previous download in it ended up failing, instead of getting stuck.
+        val laneName = DOWNLOAD_LANE_TAG_PREFIX + (ocFile.id!!.absoluteValue % MAX_CONCURRENT_DOWNLOADS)
+        workManager.beginUniqueWork(laneName, ExistingWorkPolicy.APPEND_OR_REPLACE, downloadFileWork).enqueue()
+        Timber.i("Download of ${ocFile.fileName} has been enqueued in $laneName.")
 
         return downloadFileWork.id
     }

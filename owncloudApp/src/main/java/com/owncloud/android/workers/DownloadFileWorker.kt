@@ -39,7 +39,13 @@ import com.owncloud.android.data.providers.LocalStorageProvider
 import com.owncloud.android.domain.exceptions.CancelledException
 import com.owncloud.android.domain.exceptions.LocalStorageNotMovedException
 import com.owncloud.android.domain.exceptions.LocalStoragePermissionRequiredException
+import com.owncloud.android.domain.exceptions.NetworkErrorException
 import com.owncloud.android.domain.exceptions.NoConnectionWithServerException
+import com.owncloud.android.domain.exceptions.NoNetworkConnectionException
+import com.owncloud.android.domain.exceptions.ServerConnectionTimeoutException
+import com.owncloud.android.domain.exceptions.ServerNotReachableException
+import com.owncloud.android.domain.exceptions.ServerResponseTimeoutException
+import com.owncloud.android.domain.exceptions.ServiceUnavailableException
 import com.owncloud.android.domain.files.model.OCFile
 import com.owncloud.android.domain.files.usecases.CleanConflictUseCase
 import com.owncloud.android.domain.files.usecases.CleanWorkersUUIDUseCase
@@ -59,6 +65,7 @@ import com.owncloud.android.presentation.authentication.EXTRA_ACTION
 import com.owncloud.android.presentation.authentication.LoginActivity
 import com.owncloud.android.presentation.transfers.TransferOperation.Download
 import com.owncloud.android.ui.errorhandling.ErrorMessageAdapter
+import com.owncloud.android.usecases.transfers.MAXIMUM_NUMBER_OF_RETRIES
 import com.owncloud.android.utils.DOWNLOAD_NOTIFICATION_CHANNEL_ID
 import com.owncloud.android.utils.DOWNLOAD_NOTIFICATION_ID_DEFAULT
 import com.owncloud.android.utils.FileStorageUtils
@@ -257,7 +264,13 @@ class DownloadFileWorker(
                 fileId = workerParameters.inputData.getLong(KEY_PARAM_FILE_ID, -1)
             )
         )
-        if (throwable !is CancelledException) {
+
+        val willRetry = throwable != null && isTransientNetworkError(throwable) && runAttemptCount < MAXIMUM_NUMBER_OF_RETRIES
+
+        // Skip the notification when we are about to retry silently in the background, so a transient
+        // hiccup while downloading a folder with many files does not spam a failure notification per file
+        // per attempt; only the final outcome (success or exhausted retries) gets one.
+        if (throwable !is CancelledException && !willRetry) {
 
             var tickerId = if (throwable == null) {
                 R.string.downloader_download_succeeded_ticker
@@ -300,14 +313,25 @@ class DownloadFileWorker(
 
         return if (throwable == null) {
             Result.success()
+        } else if (willRetry) {
+            // Downloading a folder with many files makes these transient errors (timeouts, brief drops,
+            // a server momentarily overwhelmed by the burst of concurrent requests) far more likely to hit
+            // at least one of them. Retrying them here instead of failing outright avoids turning a
+            // one-off hiccup into a permanent error the user has to manually retry.
+            Result.retry()
         } else {
-            if (throwable is NoConnectionWithServerException) {
-                Result.retry()
-            } else {
-                Result.failure()
-            }
+            Result.failure()
         }
     }
+
+    private fun isTransientNetworkError(throwable: Throwable): Boolean =
+        throwable is NoConnectionWithServerException ||
+            throwable is NoNetworkConnectionException ||
+            throwable is NetworkErrorException ||
+            throwable is ServerResponseTimeoutException ||
+            throwable is ServerConnectionTimeoutException ||
+            throwable is ServerNotReachableException ||
+            throwable is ServiceUnavailableException
 
     private fun composePendingIntentToRefreshCredentials(): PendingIntent {
         val updateCredentialsIntent =

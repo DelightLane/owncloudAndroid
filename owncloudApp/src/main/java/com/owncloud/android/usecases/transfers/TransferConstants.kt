@@ -22,6 +22,15 @@ const val TRANSFER_TAG_DOWNLOAD = "DOWNLOAD_TAG"
 
 const val MAXIMUM_NUMBER_OF_RETRIES = 3
 
+/**
+ * Upper bound on how many downloads WorkManager is allowed to run at the same time. Downloading a folder
+ * with many files enqueues one worker per file; without this cap they would all become eligible to run
+ * together (limited only by WorkManager's shared, app-wide executor), which makes hitting the server with
+ * many simultaneous requests - and the transient timeouts/errors that come with that - much more likely.
+ */
+const val MAX_CONCURRENT_DOWNLOADS = 3
+const val DOWNLOAD_LANE_TAG_PREFIX = "DOWNLOAD_LANE_"
+
 // Temporary solution. Probably we won't need it.
 const val DOWNLOAD_ADDED_MESSAGE = "DOWNLOAD_ADDED"
 const val DOWNLOAD_FINISH_MESSAGE = "DOWNLOAD_FINISH"
