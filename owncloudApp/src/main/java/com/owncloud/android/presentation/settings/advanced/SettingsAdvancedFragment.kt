@@ -22,14 +22,32 @@
 
 package com.owncloud.android.presentation.settings.advanced
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.DocumentsContract
+import android.provider.Settings
 import android.view.View
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.fragment.app.FragmentTransaction
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
 import com.owncloud.android.R
+import com.owncloud.android.domain.utils.Event
+import com.owncloud.android.extensions.showAlertDialog
+import com.owncloud.android.extensions.showMessageInSnackbar
+import com.owncloud.android.extensions.toDocumentTreeUriOrNull
+import com.owncloud.android.extensions.toLocalFileOrNull
+import com.owncloud.android.ui.dialog.LoadingDialog
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import timber.log.Timber
+import java.io.File
 
 class SettingsAdvancedFragment : PreferenceFragmentCompat() {
 
@@ -39,6 +57,20 @@ class SettingsAdvancedFragment : PreferenceFragmentCompat() {
     private var prefShowHiddenFiles: SwitchPreferenceCompat? = null
     private var prefShowDisabledSpaces: SwitchPreferenceCompat? = null
     private var prefRemoveLocalFiles: ListPreference? = null
+    private var prefStorageLocation: Preference? = null
+
+    private val selectStorageLocationLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
+            val treeUri = result.data?.data ?: return@registerForActivityResult
+            val selectedFolder = treeUri.toLocalFileOrNull()
+            if (selectedFolder == null || !(selectedFolder.exists() || selectedFolder.mkdirs()) || !selectedFolder.canWrite()) {
+                showMessageInSnackbar(getString(R.string.prefs_storage_location_invalid_folder))
+                return@registerForActivityResult
+            }
+            showLoadingDialog()
+            advancedViewModel.changeStorageLocation(selectedFolder)
+        }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.settings_advanced, rootKey)
@@ -62,6 +94,7 @@ class SettingsAdvancedFragment : PreferenceFragmentCompat() {
             summary = getString(R.string.prefs_delete_local_files_summary, this.entry)
         }
         prefShowDisabledSpaces = findPreference(PREF_SHOW_DISABLED_SPACES)
+        prefStorageLocation = findPreference(PREF_STORAGE_LOCATION)
         initPreferenceListeners()
     }
 
@@ -69,6 +102,17 @@ class SettingsAdvancedFragment : PreferenceFragmentCompat() {
         super.onViewCreated(view, savedInstanceState)
 
         prefShowHiddenFiles?.isChecked = advancedViewModel.isHiddenFilesShown()
+        prefStorageLocation?.summary = advancedViewModel.getCurrentStorageRootPath()
+
+        advancedViewModel.storageLocationChanged.observe(viewLifecycleOwner, Event.EventObserver { success ->
+            dismissLoadingDialog()
+            if (success) {
+                prefStorageLocation?.summary = advancedViewModel.getCurrentStorageRootPath()
+                showMessageInSnackbar(getString(R.string.prefs_storage_location_changed))
+            } else {
+                showMessageInSnackbar(getString(R.string.prefs_storage_location_change_failed))
+            }
+        })
     }
 
     private fun initPreferenceListeners() {
@@ -88,10 +132,61 @@ class SettingsAdvancedFragment : PreferenceFragmentCompat() {
             advancedViewModel.scheduleDeleteLocalFiles(newValue)
             true
         }
+
+        prefStorageLocation?.setOnPreferenceClickListener {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+                showAlertDialog(
+                    title = getString(R.string.common_important),
+                    message = getString(R.string.prefs_storage_location_permission_required, getString(R.string.app_name)),
+                    positiveButtonListener = { _, _ -> openManageAllFilesAccessSettings() },
+                )
+            } else {
+                launchStorageLocationPicker()
+            }
+            true
+        }
+    }
+
+    private fun launchStorageLocationPicker() {
+        val currentRoot = File(advancedViewModel.getCurrentStorageRootPath())
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            currentRoot.toDocumentTreeUriOrNull()?.let { putExtra(DocumentsContract.EXTRA_INITIAL_URI, it) }
+        }
+        selectStorageLocationLauncher.launch(intent)
+    }
+
+    private fun openManageAllFilesAccessSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${requireContext().packageName}")))
+        } catch (e: ActivityNotFoundException) {
+            Timber.w(e, "ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION not available, falling back to generic screen")
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            } catch (e: ActivityNotFoundException) {
+                Timber.w(e, "ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION not available either")
+            }
+        }
+    }
+
+    private fun showLoadingDialog() {
+        val fragmentManager = requireActivity().supportFragmentManager
+        if (fragmentManager.findFragmentByTag(DIALOG_STORAGE_LOCATION_WAIT_TAG) != null) return
+        val loading = LoadingDialog.newInstance(R.string.wait_a_moment, false)
+        val fragmentTransaction: FragmentTransaction = fragmentManager.beginTransaction()
+        loading.show(fragmentTransaction, DIALOG_STORAGE_LOCATION_WAIT_TAG)
+    }
+
+    private fun dismissLoadingDialog() {
+        val fragmentManager = requireActivity().supportFragmentManager
+        val waitDialogFragment = fragmentManager.findFragmentByTag(DIALOG_STORAGE_LOCATION_WAIT_TAG) as? LoadingDialog
+        waitDialogFragment?.dismiss()
     }
 
     companion object {
         const val PREF_SHOW_HIDDEN_FILES = "show_hidden_files"
         const val PREF_SHOW_DISABLED_SPACES = "show_disabled_spaces"
+        const val PREF_STORAGE_LOCATION = "storage_location"
+        private const val DIALOG_STORAGE_LOCATION_WAIT_TAG = "DIALOG_STORAGE_LOCATION_WAIT_TAG"
     }
 }

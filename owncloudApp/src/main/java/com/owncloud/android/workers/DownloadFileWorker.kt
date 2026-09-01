@@ -219,13 +219,19 @@ class DownloadFileWorker(
      */
     private fun updateDatabaseWithLatestInfoForThisFile() {
         val currentTime = System.currentTimeMillis()
+        // Read back the timestamp that the filesystem actually stored for the just-moved file (instead of
+        // using currentTime) so it matches exactly what OCFile.localModificationTimestamp will read later on.
+        // Some filesystems used by SD cards (FAT32/exFAT) only have a couple of seconds of timestamp
+        // resolution and can round it up past currentTime, which made the file look locally modified right
+        // after being downloaded and triggered an immediate, spurious re-upload.
+        val finalFileLastModified = File(finalLocationForFile).lastModified()
         ocFile.apply {
             needsToUpdateThumbnail = true
             modificationTimestamp = downloadRemoteFileOperation.modificationTimestamp
             etag = downloadRemoteFileOperation.etag
             storagePath = finalLocationForFile
             length = (File(finalLocationForFile).length())
-            lastSyncDateForData = currentTime
+            lastSyncDateForData = finalFileLastModified
             modifiedAtLastSyncForData = downloadRemoteFileOperation.modificationTimestamp
             lastUsage = currentTime
         }

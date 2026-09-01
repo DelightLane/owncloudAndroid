@@ -674,6 +674,11 @@
     <string name="prefs_delete_local_files_entries_30days">30 days</string>
     <string name="prefs_delete_local_files">Delete local copies</string>
     <string name="prefs_delete_local_files_summary">Remove automatically downloaded files that are not available offline, when the time since their last usage exceeds the selected time.\nSelected time: %1$s</string>
+    <string name="prefs_storage_location">Local storage location</string>
+    <string name="prefs_storage_location_permission_required">To choose a custom storage location, %1$s needs the \"All files access\" permission. Grant it from system settings, then try again.</string>
+    <string name="prefs_storage_location_invalid_folder">The selected folder cannot be used. Please choose a different one.</string>
+    <string name="prefs_storage_location_changed">Storage location updated</string>
+    <string name="prefs_storage_location_change_failed">Could not move existing files to the new location. Storage location was not changed.</string>
 
     <string name="insecure_http_url_title_dialog">Insecure HTTP URL</string>
     <string name="insecure_http_url_message_dialog">The URL you provided uses HTTP rather than the encrypted HTTPS protocol. If you continue, your communication will not be encrypted.</string>

@@ -636,6 +636,11 @@
     <string name="prefs_delete_local_files_entries_30days">30일</string>
     <string name="prefs_delete_local_files">로컬 사본 삭제</string>
     <string name="prefs_delete_local_files_summary">오프라인에서 사용 불가능한 다운로드 파일이 마지막 사용일로부터 설정된 시간을 초과하였을때 자동으로 삭제. \n설정된 시간: %1$s</string>
+    <string name="prefs_storage_location">로컬 저장 위치</string>
+    <string name="prefs_storage_location_permission_required">저장 위치를 직접 지정하려면 %1$s에 \'모든 파일 접근\' 권한이 필요합니다. 시스템 설정에서 권한을 허용한 후 다시 시도하세요.</string>
+    <string name="prefs_storage_location_invalid_folder">선택한 폴더를 사용할 수 없습니다. 다른 폴더를 선택하세요.</string>
+    <string name="prefs_storage_location_changed">저장 위치가 변경되었습니다</string>
+    <string name="prefs_storage_location_change_failed">기존 파일을 새 위치로 이동하지 못했습니다. 저장 위치가 변경되지 않았습니다.</string>
 
     <string name="insecure_http_url_title_dialog">안전하지 않은 HTTP URL</string>
     <string name="insecure_http_url_message_dialog">당신이 입력한 URL은 암호화된 HTTPS프로토콜 대신 HTTPS를 사용합니다. 계속하면 통신이 암호화되지 않습니다.</string>

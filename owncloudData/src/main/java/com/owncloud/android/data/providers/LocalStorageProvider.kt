@@ -156,6 +156,18 @@ sealed class LocalStorageProvider(private val rootFolderName: String) {
         Timber.d("MIGRATED FILES IN ${TimeUnit.SECONDS.convert(timeInMillis, TimeUnit.MILLISECONDS)} seconds")
     }
 
+    /**
+     * Moves every account/tmp/logs folder found under [oldRootFolderPath] into the current
+     * [getRootFolderPath], then removes the now empty old root. Used when the user picks a new
+     * local storage location from Settings, so previously downloaded files are not left behind.
+     */
+    fun moveDataFromPreviousStorageLocation(oldRootFolderPath: String) {
+        val timeInMillis = measureTimeMillis {
+            moveFileOrFolderToScopedStorage(File(oldRootFolderPath))
+        }
+        Timber.d("MIGRATED FILES IN ${TimeUnit.SECONDS.convert(timeInMillis, TimeUnit.MILLISECONDS)} seconds after changing storage location")
+    }
+
     private fun retrieveRootLegacyStorage(): File {
         val legacyStorageProvider = LegacyStorageProvider(rootFolderName)
         val rootLegacyStorage = File(legacyStorageProvider.getRootFolderPath())
