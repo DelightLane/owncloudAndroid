@@ -74,7 +74,14 @@ class SynchronizeFileUseCase(
                 SyncType.DownloadEnqueued(uuid)
             } else {
                 // 3. Check if file has changed locally
-                val changedLocally = fileToSynchronize.localModificationTimestamp > fileToSynchronize.lastSyncDateForData!!
+                // A small tolerance instead of an exact comparison: FAT32/exFAT (common on SD cards) only
+                // store modification time with a couple of seconds of resolution, and a large file can still
+                // be settling onto slow removable media by the time this runs, so the timestamp read back
+                // here can drift a little from the one stored right after the download finished. Without
+                // this margin, an untouched file - especially a big one on an SD card - could be flagged as
+                // locally modified and needlessly re-uploaded.
+                val changedLocally =
+                    fileToSynchronize.localModificationTimestamp > fileToSynchronize.lastSyncDateForData!! + LOCAL_MODIFICATION_TOLERANCE_MS
                 Timber.i("Local file modification timestamp :${fileToSynchronize.localModificationTimestamp}" +
                         " and last sync date for data :${fileToSynchronize.lastSyncDateForData}")
                 Timber.i("So it has changed locally: $changedLocally")
@@ -150,5 +157,9 @@ class SynchronizeFileUseCase(
         data class DownloadEnqueued(val workerId: UUID?) : SyncType
         data class UploadEnqueued(val workerId: UUID?) : SyncType
         object AlreadySynchronized : SyncType
+    }
+
+    companion object {
+        private const val LOCAL_MODIFICATION_TOLERANCE_MS = 5_000L
     }
 }
