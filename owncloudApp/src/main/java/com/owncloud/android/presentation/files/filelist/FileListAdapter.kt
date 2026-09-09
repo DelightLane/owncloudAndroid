@@ -384,6 +384,13 @@ class FileListAdapter(
             // conflict
             localStateView.setImageResource(R.drawable.error_pin)
             localStateView.visibility = View.VISIBLE
+        } else if (file.isAvailableOffline && !file.isFolder && !file.isAvailableLocally) {
+            // Marked to be kept available offline, but there is no local copy - still pending its first
+            // sync, or a download that failed and won't be retried until the next sync pass. isAvailableOffline
+            // alone only reflects that the file SHOULD be kept offline, not that it actually is, so without this
+            // check it would show the same badge as a file that is genuinely fully downloaded.
+            localStateView.setImageResource(R.drawable.error_pin)
+            localStateView.visibility = View.VISIBLE
         } else if (file.isAvailableOffline) {
             localStateView.visibility = View.VISIBLE
             localStateView.setImageResource(R.drawable.offline_available_pin)

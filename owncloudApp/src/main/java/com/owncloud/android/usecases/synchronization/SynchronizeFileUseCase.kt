@@ -25,6 +25,7 @@ import com.owncloud.android.domain.BaseUseCaseWithResult
 import com.owncloud.android.domain.exceptions.FileNotFoundException
 import com.owncloud.android.domain.files.FileRepository
 import com.owncloud.android.domain.files.model.OCFile
+import com.owncloud.android.domain.files.usecases.CleanConflictUseCase
 import com.owncloud.android.domain.files.usecases.SaveConflictUseCase
 import com.owncloud.android.usecases.transfers.downloads.DownloadFileUseCase
 import com.owncloud.android.usecases.transfers.uploads.UploadFileInConflictUseCase
@@ -37,6 +38,7 @@ class SynchronizeFileUseCase(
     private val downloadFileUseCase: DownloadFileUseCase,
     private val uploadFileInConflictUseCase: UploadFileInConflictUseCase,
     private val saveConflictUseCase: SaveConflictUseCase,
+    private val cleanConflictUseCase: CleanConflictUseCase,
     private val fileRepository: FileRepository,
 ) : BaseUseCaseWithResult<SynchronizeFileUseCase.SyncType, SynchronizeFileUseCase.Params>() {
 
@@ -107,6 +109,13 @@ class SynchronizeFileUseCase(
                 } else {
                     // 5.4 File has not change locally not remotely -> do nothing
                     Timber.i("File ${fileToSynchronize.fileName} is already synchronized. Nothing to do here")
+                    // Local and remote agree, so any conflict flag left over from an earlier, now stale,
+                    // detection no longer applies. Without this, a file whose conflict was never a real
+                    // divergence (or has since resolved itself) would keep showing as conflicted forever,
+                    // since this is the only branch reached once both sides genuinely match again.
+                    if (fileToSynchronize.etagInConflict != null) {
+                        cleanConflictUseCase(CleanConflictUseCase.Params(fileId = fileToSynchronize.id!!))
+                    }
                     SyncType.AlreadySynchronized
                 }
             }

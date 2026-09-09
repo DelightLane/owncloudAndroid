@@ -44,7 +44,13 @@ class FileDetailsFragmentTest {
     private var currentFileWithoutPersonalSpace: MutableStateFlow<OCFileWithSyncInfo?> =
         MutableStateFlow(OC_FILE_WITH_SYNC_INFO_AND_WITHOUT_PERSONAL_SPACE)
     private var currentFileSyncInfo: MutableStateFlow<OCFileWithSyncInfo?> = MutableStateFlow(OC_FILE_WITH_SYNC_INFO)
-    private var currentFileAvailableOffline: MutableStateFlow<OCFileWithSyncInfo?> = MutableStateFlow(OC_FILE_WITH_SYNC_INFO_AVAILABLE_OFFLINE)
+    private var currentFileAvailableOffline: MutableStateFlow<OCFileWithSyncInfo?> = MutableStateFlow(
+        OC_FILE_WITH_SYNC_INFO_AVAILABLE_OFFLINE.copy(
+            file = OC_FILE_WITH_SYNC_INFO_AVAILABLE_OFFLINE.file.copy(storagePath = "/local/storage/path/username@demo.owncloud.com/Photos/image.jpt")
+        )
+    )
+    private var currentFileAvailableOfflineNotDownloadedYet: MutableStateFlow<OCFileWithSyncInfo?> =
+        MutableStateFlow(OC_FILE_WITH_SYNC_INFO_AVAILABLE_OFFLINE)
 
     @Before
     fun setUp() {
@@ -162,6 +168,15 @@ class FileDetailsFragmentTest {
         onView(withId(R.id.badgeDetailFile))
             .check(matches(withDrawable(R.drawable.offline_available_pin)))
 
+    }
+
+    @Test
+    fun badge_shows_error_when_file_is_marked_available_offline_but_has_no_local_copy_yet() {
+        every { fileDetailsViewModel.currentFile } returns currentFileAvailableOfflineNotDownloadedYet
+
+        R.id.badgeDetailFile.assertVisibility(ViewMatchers.Visibility.VISIBLE)
+        onView(withId(R.id.badgeDetailFile))
+            .check(matches(withDrawable(R.drawable.error_pin)))
     }
 
     @Test

@@ -70,10 +70,13 @@ import com.owncloud.android.utils.DOWNLOAD_NOTIFICATION_CHANNEL_ID
 import com.owncloud.android.utils.DOWNLOAD_NOTIFICATION_ID_DEFAULT
 import com.owncloud.android.utils.FileStorageUtils
 import com.owncloud.android.utils.NOTIFICATION_TIMEOUT_STANDARD
+import com.owncloud.android.usecases.transfers.MAX_CONCURRENT_DOWNLOADS
 import com.owncloud.android.utils.NotificationUtils.createBasicNotification
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import timber.log.Timber
@@ -126,15 +129,23 @@ class DownloadFileWorker(
     override suspend fun doWork(): Result {
         if (!areParametersValid()) return Result.failure()
 
-        return try {
-            if (!isLocalStoragePermissionGranted()) throw LocalStoragePermissionRequiredException()
-            downloadFileToTemporalFile()
-            moveTemporalFileToFinalLocation()
-            updateDatabaseWithLatestInfoForThisFile()
-            notifyDownloadResult(null)
-        } catch (throwable: Throwable) {
-            Timber.e(throwable)
-            notifyDownloadResult(throwable)
+        // Cap how many downloads are actually transferring at once (independently of how many
+        // DownloadFileWorker instances WorkManager has started), instead of chaining files together into
+        // unique-work lanes. Chaining made every file after a permanently failed one in the same lane get
+        // silently cancelled without ever running - a single broken file could take a whole batch of
+        // otherwise fine files down with it. A permit-based limit keeps every file's download independent:
+        // one file's failure or retries never affects any other file's chances of being downloaded.
+        return downloadSemaphore.withPermit {
+            try {
+                if (!isLocalStoragePermissionGranted()) throw LocalStoragePermissionRequiredException()
+                downloadFileToTemporalFile()
+                moveTemporalFileToFinalLocation()
+                updateDatabaseWithLatestInfoForThisFile()
+                notifyDownloadResult(null)
+            } catch (throwable: Throwable) {
+                Timber.e(throwable)
+                notifyDownloadResult(throwable)
+            }
         }
     }
 
@@ -259,13 +270,19 @@ class DownloadFileWorker(
     private fun notifyDownloadResult(
         throwable: Throwable?
     ): Result {
-        cleanWorkersUuidUseCase(
-            CleanWorkersUUIDUseCase.Params(
-                fileId = workerParameters.inputData.getLong(KEY_PARAM_FILE_ID, -1)
-            )
-        )
-
         val willRetry = throwable != null && isTransientNetworkError(throwable) && runAttemptCount < MAXIMUM_NUMBER_OF_RETRIES
+
+        // Only clear the "synchronizing" state when this attempt is truly done (succeeded or permanently
+        // failed). Clearing it while a retry is still pending made the file (and its parent folder) briefly
+        // look like it was not being synced during the backoff wait, even though WorkManager was about to
+        // try again in the background.
+        if (!willRetry) {
+            cleanWorkersUuidUseCase(
+                CleanWorkersUUIDUseCase.Params(
+                    fileId = workerParameters.inputData.getLong(KEY_PARAM_FILE_ID, -1)
+                )
+            )
+        }
 
         // Skip the notification when we are about to retry silently in the background, so a transient
         // hiccup while downloading a folder with many files does not spam a failure notification per file
@@ -401,5 +418,9 @@ class DownloadFileWorker(
         const val KEY_PARAM_ACCOUNT = "KEY_PARAM_ACCOUNT"
         const val KEY_PARAM_FILE_ID = "KEY_PARAM_FILE_ID"
         const val WORKER_KEY_PROGRESS = "KEY_PROGRESS"
+
+        // Shared across every DownloadFileWorker instance in the process, so at most MAX_CONCURRENT_DOWNLOADS
+        // of them are actually transferring at the same time regardless of how many WorkManager has started.
+        private val downloadSemaphore = Semaphore(MAX_CONCURRENT_DOWNLOADS)
     }
 }

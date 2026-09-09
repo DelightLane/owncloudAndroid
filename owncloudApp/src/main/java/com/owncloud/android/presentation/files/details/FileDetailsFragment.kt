@@ -406,6 +406,11 @@ class FileDetailsFragment : FileFragment() {
             // conflict
             thumbnailImageView.setImageResource(R.drawable.error_pin)
             thumbnailImageView.visibility = View.VISIBLE
+        } else if (file.isAvailableOffline && !file.isFolder && !file.isAvailableLocally) {
+            // See FileListAdapter.setIconPinAccordingToFilesLocalState: isAvailableOffline alone only means
+            // the file should be kept offline, not that a local copy actually exists yet.
+            thumbnailImageView.setImageResource(R.drawable.error_pin)
+            thumbnailImageView.visibility = View.VISIBLE
         } else if (file.isAvailableOffline) {
             thumbnailImageView.setImageResource(R.drawable.offline_available_pin)
             thumbnailImageView.visibility = View.VISIBLE
